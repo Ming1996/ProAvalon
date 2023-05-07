@@ -30,6 +30,8 @@ import forumRoutes from './routes/forum';
 import profileRoutes from './routes/profile';
 import patreonRoutes from './routes/patreon';
 import modRoutes from './routes/mod';
+import dev from './routes/dev'
+import matchRoutes from './routes/match'
 import staticifyFactory from 'staticify';
 // Create a MongoDB session store
 import MongoDBStoreFactory from 'connect-mongodb-session';
@@ -158,6 +160,7 @@ app.use(methodOverride('_method'));
 
 app.use(indexRoutes);
 app.use(communityRoutes);
+app.use('/dev',dev)
 
 // Lobby, forum, and profile routes require a logged in user
 app.use(isLoggedIn);
@@ -172,6 +175,7 @@ app.use('/patreon', patreonRoutes);
 app.use('/lobby', lobbyRoutes);
 app.use('/forum', forumRoutes);
 app.use('/profile', profileRoutes);
+app.use('/match', matchRoutes);
 
 const IP = process.env.IP || '127.0.0.1';
 const server = app.listen(port, () => {
