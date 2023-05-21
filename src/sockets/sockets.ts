@@ -35,6 +35,7 @@ import { mrevealallroles } from './commands/mod/mrevealallroles';
 
 import { lastWhisperObj } from './commands/mod/mwhisper';
 import * as util from 'util';
+import { matchMakePlayers } from 'src/match/matchMakingFunction';
 
 const chatSpamFilter = new ChatSpamFilter();
 if (process.env.NODE_ENV !== 'test') {
@@ -2559,22 +2560,19 @@ const prospectivePlayersFor6RQ: MatchMakingQueueItem[] = [];
 const readyPlayersFor6RQ: MatchMakingQueueItem[] = [];
 
 // Ask each player to confirm they are ready to join
-function checkForRankedConfirmation() {
-
-  // Implement Ming's algorithm to match players based on rank - matchMakePlayers
-
-  // prospectivePlayersFor6RQ = matchMakePlayers(rankedQueue6Players);
-  // prospectivePlayersFor6RQ.forEach(prospectivePlayer => {
-  //   // emit to each player asking for confirmation
-  //   const playerSocket: SocketUser = getSocketFromUsername(prospectivePlayer.user.username.toLowerCase());
-  //   playerSocket.emit('confirm-ready-to-play');
-  // });
+function checkForRankedConfirmation(queue: MatchMakingQueueItem[]) {
+  const matchedResult = matchMakePlayers(queue);
+  prospectivePlayersFor6RQ.push(...matchedResult)
+  prospectivePlayersFor6RQ.forEach(prospectivePlayer => {
+    // emit to each player asking for confirmation
+    const playerSocket: SocketUser = getSocketFromUsername(prospectivePlayer.user.username.toLowerCase());
+    playerSocket.emit('confirm-ready-to-play');
+  });
 }
 
 // Add player to queue, and start match if six players in queue
 function joinRankedQueue(dataObj) {
   // add player to queue
-
   // First if checks if player is joining the six-player game or not
   if (dataObj.numPlayers === 6 && 
     !rankedQueue6Players.some(player => player.id === this.request.user.username.toLowerCase())
@@ -2589,7 +2587,7 @@ function joinRankedQueue(dataObj) {
     // if number of players in queue < 6, return null
     // Second if checks if there are enough players for a six-player game
     if (rankedQueue6Players.length >= 6) {
-      checkForRankedConfirmation();
+      checkForRankedConfirmation(rankedQueue6Players);
     } else {
       return;
     }
