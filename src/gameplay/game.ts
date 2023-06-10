@@ -6,6 +6,7 @@ import { getSeasonNumber } from '../db/modelsHelper/seasonNumber';
 import Mongo from '../db/mongo';
 import RatingPeriodGameRecord from '../models/RatingPeriodGameRecord';
 import GameRecord from '../models/gameRecord';
+import Rank from '../models/rank';
 import User from '../models/user';
 import { isDev } from '../modsadmins/developers';
 import { modOrTOString } from '../modsadmins/modOrTO';
@@ -16,6 +17,7 @@ import { gameModeObj } from './gameModes';
 import commonPhasesIndex from './indexCommonPhases';
 import Room from './room';
 import { getRoomTypeFromString, roomCreationTypeEnum } from './roomTypes';
+import ScoreRedistributor from './scoreRedistributor';
 
 class Game extends Room {
   gameStarted = false;
@@ -1181,21 +1183,7 @@ class Game extends Room {
     // If the player doesn't have a ranking, assign the default ranking
     if (this.ranked) {
       const seasonNumber = await getSeasonNumber();
-      const playerPromises = this.playersInGame.map(async (player) => {
-        if (!player.username.includes('SimpleBot')) {
-          let user = await Mongo.getUserByUserId(player.userId);
-          if (!user) {
-            throw new Error('No user found with id: ' + player.userId);
-          }
-          await assignDefaultRankToUser(user, seasonNumber);
-        }
-      });
-
-      try {
-        await Promise.all(playerPromises);
-      } catch (error) {
-        console.log('Error assigning default rank:', error);
-      }
+      await assignDefaultRankToUsers(this.playersInGame, seasonNumber);
     }
 
     if (this.checkRoleCardSpecialMoves() === true) {
@@ -1672,6 +1660,22 @@ class Game extends Room {
     }
   }
 
+  async voidedGame(leavePlayers, nonLeavePlayers) {
+    // If the player doesn't have a ranking, assign the default ranking
+    if (this.ranked) {
+      const seasonNumber = await getSeasonNumber();
+      await assignDefaultRankToUsers(this.playersInGame, seasonNumber);
+    }
+
+    await ScoreRedistributor.punishPlayers(leavePlayers, nonLeavePlayers);
+    this.sendText(
+      this.allSockets,
+      `Someone fails to complete the operation within the specified time, Game is voided.`,
+      'server-text',
+    );
+    this.phase = 'voided';
+    this.distributeGameData();
+  }
   calcMissionVotes(votes) {
     let requiresTwoFails = false;
     if (this.playersInGame.length >= 7 && this.missionNum === 4) {
@@ -2225,40 +2229,29 @@ let reverseMapFromMap = function (map, f) {
   }, {});
 };
 
-async function assignDefaultRankToUser(user: User, seasonNumber: number) {
-  if (!user) {
-    console.log(`User is not defined`);
-    return;
-  }
-
-  if (user.currentRanking !== null) {
-    console.log(`User already has a rank`);
-    return;
-  }
-
-  if (typeof seasonNumber !== 'number') {
-    console.log(`Season number is not a number, seasonNumber: ${seasonNumber}`);
-    return;
-  }
-
-  const rankData = new Rank({
-    userId: user._id,
-    username: user.username,
-    seasonNumber: seasonNumber,
-  });
-
-  try {
-    await rankData.save();
-    console.log(
-      `Rank data for ${user.username} saved, rankedId: ${rankData._id}`,
-    );
-
-    user.currentRanking = rankData._id;
-    await user.save();
-    console.log(
-      `Rank data for ${user.username} assigned, currentRanking: ${user.currentRanking}`,
-    );
-  } catch (error) {
-    console.log(`Error assigning default rank to user: ${error}`);
+async function assignDefaultRankToUsers(
+  players: IUser[],
+  seasonNumber: number,
+) {
+  for (const player of players) {
+    const user = await Mongo.getUserByUserId(player.userId);
+    if (!user.currentRanking) {
+      const rankData = new Rank({
+        userId: user._id,
+        username: user.username,
+        seasonNumber: seasonNumber,
+      });
+      await rankData.save();
+      console.log(
+        `Rank data for ${user.username} saved, rankedId: ${rankData._id}`,
+      );
+      user.currentRanking = rankData._id;
+      await user.save();
+      console.log(
+        `Rank data for ${user.username} assigned, currentRanking: ${user.currentRanking}`,
+      );
+    } else {
+      console.log(`User ${user.username} already has a rank`);
+    }
   }
 }
