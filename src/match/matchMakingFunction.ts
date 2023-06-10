@@ -53,7 +53,6 @@ export function matchMakePlayers(playersInQueue: MatchMakingQueueItem[]) {
     }
   }
 
-  console.log({ matchMakePlayers, min, waitingTime });
 
   if (min < ALLOWABLE_RATING_VARIANCE) {
     // match found
