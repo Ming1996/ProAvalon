@@ -2,15 +2,6 @@ import Mongo from '../db/mongo';
 import { eloConstants } from '../elo/constants/eloConstants';
 
 class ScoreRedistributor {
-  static async updateRankData(
-    usernameLower: string,
-    leavePenaltyChange: number,
-  ): Promise<void> {
-    const rankData = await Mongo.getUserRankByUsername(usernameLower);
-    rankData.leavePenalty += leavePenaltyChange;
-    await Mongo.updateRankRatings(usernameLower, rankData);
-  }
-
   static async punishPlayers(
     leavePlayers: string[],
     nonLeavePlayers: string[],
@@ -53,6 +44,15 @@ class ScoreRedistributor {
     );
 
     await Promise.all(compensateNonLeaversPromises);
+  }
+
+  static async updateRankData(
+    usernameLower: string,
+    leavePenaltyChange: number,
+  ): Promise<void> {
+    const rankData = await Mongo.getUserRankByUsername(usernameLower);
+    rankData.leavePenalty += leavePenaltyChange;
+    await Mongo.updateRankRatings(usernameLower, rankData);
   }
 }
 
