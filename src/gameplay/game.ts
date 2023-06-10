@@ -2,19 +2,20 @@
 // Load the full build.
 import _ from 'lodash';
 
-import Room from './room';
-import usernamesIndexes from '../myFunctions/usernamesIndexes';
-import User from '../models/user';
-import GameRecord from '../models/gameRecord';
+import { getSeasonNumber } from '../db/modelsHelper/seasonNumber';
+import Mongo from '../db/mongo';
 import RatingPeriodGameRecord from '../models/RatingPeriodGameRecord';
-import commonPhasesIndex from './indexCommonPhases';
-import { isMod } from '../modsadmins/mods';
-import { isTO } from '../modsadmins/tournamentOrganizers';
+import GameRecord from '../models/gameRecord';
+import User from '../models/user';
 import { isDev } from '../modsadmins/developers';
 import { modOrTOString } from '../modsadmins/modOrTO';
-
-import { getRoomTypeFromString, roomCreationTypeEnum } from './roomTypes';
+import { isMod } from '../modsadmins/mods';
+import { isTO } from '../modsadmins/tournamentOrganizers';
+import usernamesIndexes from '../myFunctions/usernamesIndexes';
 import { gameModeObj } from './gameModes';
+import commonPhasesIndex from './indexCommonPhases';
+import Room from './room';
+import { getRoomTypeFromString, roomCreationTypeEnum } from './roomTypes';
 
 class Game extends Room {
   gameStarted = false;
@@ -1166,7 +1167,7 @@ class Game extends Room {
     return 'Waiting';
   }
 
-  finishGame(toBeWinner) {
+  async finishGame(toBeWinner) {
     const timeStarted = new Date(this.startGameTime);
     const timeFinished = new Date();
     const gameDuration = new Date(timeFinished - timeStarted);
@@ -1176,6 +1177,26 @@ class Game extends Room {
 
     const thisGame = this;
     this.phase = 'finished';
+
+    // If the player doesn't have a ranking, assign the default ranking
+    if (this.ranked) {
+      const seasonNumber = await getSeasonNumber();
+      const playerPromises = this.playersInGame.map(async (player) => {
+        if (!player.username.includes('SimpleBot')) {
+          let user = await Mongo.getUserByUserId(player.userId);
+          if (!user) {
+            throw new Error('No user found with id: ' + player.userId);
+          }
+          await assignDefaultRankToUser(user, seasonNumber);
+        }
+      });
+
+      try {
+        await Promise.all(playerPromises);
+      } catch (error) {
+        console.log('Error assigning default rank:', error);
+      }
+    }
 
     if (this.checkRoleCardSpecialMoves() === true) {
       return;
@@ -2203,3 +2224,41 @@ let reverseMapFromMap = function (map, f) {
     return acc;
   }, {});
 };
+
+async function assignDefaultRankToUser(user: User, seasonNumber: number) {
+  if (!user) {
+    console.log(`User is not defined`);
+    return;
+  }
+
+  if (user.currentRanking !== null) {
+    console.log(`User already has a rank`);
+    return;
+  }
+
+  if (typeof seasonNumber !== 'number') {
+    console.log(`Season number is not a number, seasonNumber: ${seasonNumber}`);
+    return;
+  }
+
+  const rankData = new Rank({
+    userId: user._id,
+    username: user.username,
+    seasonNumber: seasonNumber,
+  });
+
+  try {
+    await rankData.save();
+    console.log(
+      `Rank data for ${user.username} saved, rankedId: ${rankData._id}`,
+    );
+
+    user.currentRanking = rankData._id;
+    await user.save();
+    console.log(
+      `Rank data for ${user.username} assigned, currentRanking: ${user.currentRanking}`,
+    );
+  } catch (error) {
+    console.log(`Error assigning default rank to user: ${error}`);
+  }
+}
