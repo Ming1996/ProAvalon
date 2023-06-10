@@ -1,5 +1,4 @@
-import { Types, Model } from "mongoose";
-import User from './user';
+import { Types } from "mongoose";
 
 export interface IRatingPeriodGameRecord {
   timeGameFinished: Date,
@@ -16,6 +15,7 @@ export interface IRank {
   playerRating?: number,
   rd?: number,
   volatility?: number,
+  leavePenalty?: number,
 }
 
 export interface IUser {

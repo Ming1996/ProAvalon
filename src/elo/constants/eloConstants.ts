@@ -4,6 +4,7 @@ const eloConstants = {
   DEFAULT_RD: 350,
   DEFAULT_VOL: 0.06,
   PROVISION_GAMES: 20,
+  LEAVE_PENALTY : -100,
 } as const;
 const rankBracketConstants = {
   BRONZE_BASE: 1300,
