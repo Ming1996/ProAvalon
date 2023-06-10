@@ -2,7 +2,7 @@ import Mongo from '../db/mongo';
 import { eloConstants } from '../elo/constants/eloConstants';
 import { IUser } from '../models/types';
 
-class LeaveGameDetection {
+class ScoreRedistributor {
   static async punishingPlayers(
     leavePlayers: string[],
     nonLeavePlayers: string[],
@@ -51,4 +51,4 @@ class LeaveGameDetection {
   }
 }
 
-export default LeaveGameDetection;
+export default ScoreRedistributor;
