@@ -1,19 +1,27 @@
-import { MatchMakingQueueItem } from "./MatchMakingQueueItem";
+import { MatchMakingQueueItem } from './MatchMakingQueueItem';
+
+const WINDOW_SIZE = 6; // 6 players for now
+const WAITING_PERIOD = 60000; // 60 seconds for now, can change latter ( wait up to 1 mins)
+let ALLOWABLE_RATING_VARIANCE = 10000; // players rating points variance
 
 export const avg = (values: number[]) => {
   return values.reduce((sum, current) => sum + current, 0) / values.length;
 };
 
-export const variance = (values: number[], waitingTime: number[]) => {
-  const waitingPeriod = 60000; // 60 seconds for now, can change latter ( wait up to 1 mins)
-  const average = avg(values);
-  const squareDiffs = values.map((value, index) => {
+/**
+ * This function will calculate the variance of 6 (window size) players variance
+ * @param rating players' rating array
+ * @param waitingTime players' waiting time
+ * @returns 
+ */
+export const matchQuality = (rating: number[], waitingTime: number[]) => {
+  const average = avg(rating);
+  const squareDiffs = rating.map((value, index) => {
     let diff = value - average;
     const timeDiff = waitingTime[index];
-
-    // decrease the variance
-    if (timeDiff > waitingPeriod) {
-      diff = Math.abs(diff) * (waitingPeriod / timeDiff);
+    // decrease the variance by waiting time
+    if (timeDiff > WAITING_PERIOD) {
+      diff = Math.abs(diff) * (WAITING_PERIOD / timeDiff);
     }
     return diff * diff;
   });
@@ -21,63 +29,44 @@ export const variance = (values: number[], waitingTime: number[]) => {
   return variance;
 };
 
-export function matchMakePlayers(queue: MatchMakingQueueItem[]) {
-//   const queue = rankedQueue.get();
-  if (queue.length < 6) {
+export function matchMakePlayers(playersInQueue: MatchMakingQueueItem[]) {
+  if (playersInQueue.length < 6) {
     return [];
   }
 
-  const sortedRating = queue.map(({ playerRating }) => playerRating);
-  const waitingTime = queue.map(({ timeJoinedAt }) => Date.now() - timeJoinedAt);
-  const window = 6; // 6 players for now
-
-  let validVariance = 1000; // players rating points variance
+  const sortedRating = playersInQueue.map(({ playerRating }) => playerRating);
+  const waitingTime = playersInQueue.map(
+    ({ timeJoinedAt }) => Date.now() - timeJoinedAt,
+  );
 
   let min = +Infinity;
   let playerIndex = -1;
 
-  for (let index = 0; index < sortedRating.length - window + 1; index++) {
-    const v = variance(
-      sortedRating.slice(index, index + window),
-      waitingTime.slice(index, index + window),
+  for (let index = 0; index < sortedRating.length - WINDOW_SIZE + 1; index++) {
+    const matchQualityValue = matchQuality(
+      sortedRating.slice(index, index + WINDOW_SIZE),
+      waitingTime.slice(index, index + WINDOW_SIZE),
     );
-    if (v < min) {
-      min = v;
+    if (matchQualityValue < min) {
+      min = matchQualityValue;
       playerIndex = index;
     }
   }
-  console.log({matchMakePlayers,min,waitingTime})
-  if (min < validVariance) {
-    // match found
-    const matched = queue.slice(playerIndex, playerIndex + window);
 
-    // Socket API will handle this
-    // matched.forEach((player) => {
-    //   rankedQueue.leave(player.id);
-    // });
+  console.log({ matchMakePlayers, min, waitingTime });
+
+  if (min < ALLOWABLE_RATING_VARIANCE) {
+    // match found
+    const matched = playersInQueue.slice(playerIndex, playerIndex + WINDOW_SIZE);
+    // output the matched queue
+    // Socket API will handle those player leave queue
     printQueue(matched);
     return matched;
   }
 }
 
-// export const debouncedMatch = debounce(matchMakePlayers, 3000);
-
-function printQueue(queue: MatchMakingQueueItem[]) {
-  console.log(queue.map(({ username, playerRating }) => ({ username, playerRating })));
+function printQueue(playersInQueue: MatchMakingQueueItem[]) {
+  console.log(
+    playersInQueue.map(({ username, playerRating }) => ({ username, playerRating })),
+  );
 }
-// this part is done by socket API
-
-// when someone join the queue
-// rankedQueue.subscribe({
-//   onJoin: (playerId) => {
-//     console.log(`${playerId} joined`);
-//     printQueue(rankedQueue.get());
-//     debouncedMatch();
-//   },
-//   onLeave: (playerId) => {
-//     console.log(playerId + ' left');
-//     debouncedMatch();
-//   },
-//   subscriberId: 'match_making',
-// });
-
