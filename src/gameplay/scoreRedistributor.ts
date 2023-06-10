@@ -1,12 +1,12 @@
 import Mongo from '../db/mongo';
 import { eloConstants } from '../elo/constants/eloConstants';
-import { IUser } from '../models/types';
 
 class ScoreRedistributor {
-  static async punishingPlayers(
+  static async punishPlayers(
     leavePlayers: string[],
     nonLeavePlayers: string[],
   ): Promise<void> {
+    // Get all the players
     const leavePlayerPromises = leavePlayers.map((leavePlayer) =>
       Mongo.getUserByUsername(leavePlayer),
     );
@@ -19,35 +19,30 @@ class ScoreRedistributor {
       Promise.all(nonLeavePlayerPromises),
     ]);
 
-    const redistributeScore = await this.leavePenalty(leaves);
-    console.log(`Redistribute score: ${redistributeScore}`);
+    // Scores wait to distribute
+    let score = 0;
 
-    await this.redistributeScores(redistributeScore, nonleaves);
-  }
+    // Punish the leavers
+    for (const leavePlayer of leaves) {
+      const rankData = await Mongo.getUserRankByUserId(
+        leavePlayer.usernameLower,
+      );
+      rankData.leavePenalty -= eloConstants.LEAVE_PENALTY;
+      await Mongo.updateRankRatings(leavePlayer.usernameLower, rankData);
+      score += eloConstants.LEAVE_PENALTY;
+    }
 
-  private static async redistributeScores(
-    score: number,
-    nonleavePlayers: IUser[],
-  ): Promise<void> {
-    const compensation = score / nonleavePlayers.length;
-    for (const nonleavePlayer of nonleavePlayers) {
+    // Distribute the score to the nonleaves
+    const compensation = score / nonleaves.length;
+
+    // Compensate the nonleaves
+    for (const nonleavePlayer of nonleaves) {
       const rankData = await Mongo.getUserRankByUsername(
         nonleavePlayer.usernameLower,
       );
       rankData.leavePenalty += compensation;
       await Mongo.updateRankRatings(nonleavePlayer.usernameLower, rankData);
     }
-  }
-
-  private static async leavePenalty(leavePlayers: IUser[]): Promise<number> {
-    for (const leavePlayer of leavePlayers) {
-      const rankData = await Mongo.getUserRankByUserId(
-        leavePlayer.usernameLower,
-      );
-      rankData.leavePenalty += eloConstants.LEAVE_PENALTY;
-      await Mongo.updateRankRatings(leavePlayer.usernameLower, rankData);
-    }
-    return eloConstants.LEAVE_PENALTY * leavePlayers.length;
   }
 }
 
