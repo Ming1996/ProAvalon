@@ -2,6 +2,15 @@ import Mongo from '../db/mongo';
 import { eloConstants } from '../elo/constants/eloConstants';
 
 class ScoreRedistributor {
+  static async updateRankData(
+    usernameLower: string,
+    leavePenaltyChange: number,
+  ): Promise<void> {
+    const rankData = await Mongo.getUserRankByUsername(usernameLower);
+    rankData.leavePenalty += leavePenaltyChange;
+    await Mongo.updateRankRatings(usernameLower, rankData);
+  }
+
   static async punishPlayers(
     leavePlayers: string[],
     nonLeavePlayers: string[],
@@ -23,26 +32,27 @@ class ScoreRedistributor {
     let score = 0;
 
     // Punish the leavers
-    for (const leavePlayer of leaves) {
-      const rankData = await Mongo.getUserRankByUserId(
+    const punishLeaversPromises = leaves.map(async (leavePlayer) => {
+      await this.updateRankData(
         leavePlayer.usernameLower,
+        -eloConstants.LEAVE_PENALTY,
       );
-      rankData.leavePenalty -= eloConstants.LEAVE_PENALTY;
-      await Mongo.updateRankRatings(leavePlayer.usernameLower, rankData);
       score += eloConstants.LEAVE_PENALTY;
-    }
+    });
+
+    await Promise.all(punishLeaversPromises);
 
     // Distribute the score to the nonleaves
     const compensation = score / nonleaves.length;
 
     // Compensate the nonleaves
-    for (const nonleavePlayer of nonleaves) {
-      const rankData = await Mongo.getUserRankByUsername(
-        nonleavePlayer.usernameLower,
-      );
-      rankData.leavePenalty += compensation;
-      await Mongo.updateRankRatings(nonleavePlayer.usernameLower, rankData);
-    }
+    const compensateNonLeaversPromises = nonleaves.map(
+      async (nonleavePlayer) => {
+        await this.updateRankData(nonleavePlayer.usernameLower, compensation);
+      },
+    );
+
+    await Promise.all(compensateNonLeaversPromises);
   }
 }
 
