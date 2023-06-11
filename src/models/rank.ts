@@ -29,6 +29,10 @@ const rankSchema = new mongoose.Schema<IRank>({
     type: Number,
     default: eloConstants.DEFAULT_VOL,
   },
+  leavePenalty: {
+    type: Number,
+    default: 0,
+  },
 });
 
 const rank = mongoose.model<IRank>('rank', rankSchema);

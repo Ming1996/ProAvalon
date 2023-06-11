@@ -2,19 +2,22 @@
 // Load the full build.
 import _ from 'lodash';
 
-import Room from './room';
-import usernamesIndexes from '../myFunctions/usernamesIndexes';
-import User from '../models/user';
-import GameRecord from '../models/gameRecord';
+import { getSeasonNumber } from '../db/modelsHelper/seasonNumber';
+import Mongo from '../db/mongo';
 import RatingPeriodGameRecord from '../models/RatingPeriodGameRecord';
-import commonPhasesIndex from './indexCommonPhases';
-import { isMod } from '../modsadmins/mods';
-import { isTO } from '../modsadmins/tournamentOrganizers';
+import GameRecord from '../models/gameRecord';
+import Rank from '../models/rank';
+import User from '../models/user';
 import { isDev } from '../modsadmins/developers';
 import { modOrTOString } from '../modsadmins/modOrTO';
-
-import { getRoomTypeFromString, roomCreationTypeEnum } from './roomTypes';
+import { isMod } from '../modsadmins/mods';
+import { isTO } from '../modsadmins/tournamentOrganizers';
+import usernamesIndexes from '../myFunctions/usernamesIndexes';
 import { gameModeObj } from './gameModes';
+import commonPhasesIndex from './indexCommonPhases';
+import Room from './room';
+import { getRoomTypeFromString, roomCreationTypeEnum } from './roomTypes';
+import ScoreRedistributor from './scoreRedistributor';
 
 class Game extends Room {
   gameStarted = false;
@@ -1166,7 +1169,7 @@ class Game extends Room {
     return 'Waiting';
   }
 
-  finishGame(toBeWinner) {
+  async finishGame(toBeWinner) {
     const timeStarted = new Date(this.startGameTime);
     const timeFinished = new Date();
     const gameDuration = new Date(timeFinished - timeStarted);
@@ -1176,6 +1179,12 @@ class Game extends Room {
 
     const thisGame = this;
     this.phase = 'finished';
+
+    // If the player doesn't have a ranking, assign the default ranking
+    if (this.ranked) {
+      const seasonNumber = await getSeasonNumber();
+      await assignDefaultRankToUsers(this.playersInGame, seasonNumber);
+    }
 
     if (this.checkRoleCardSpecialMoves() === true) {
       return;
@@ -1651,6 +1660,22 @@ class Game extends Room {
     }
   }
 
+  async voidedGame(leavePlayers, nonLeavePlayers) {
+    // If the player doesn't have a ranking, assign the default ranking
+    if (this.ranked) {
+      const seasonNumber = await getSeasonNumber();
+      await assignDefaultRankToUsers(this.playersInGame, seasonNumber);
+    }
+
+    await ScoreRedistributor.punishPlayers(leavePlayers, nonLeavePlayers);
+    this.sendText(
+      this.allSockets,
+      `Someone fails to complete the operation within the specified time, Game is voided.`,
+      'server-text',
+    );
+    this.phase = 'voided';
+    this.distributeGameData();
+  }
   calcMissionVotes(votes) {
     let requiresTwoFails = false;
     if (this.playersInGame.length >= 7 && this.missionNum === 4) {
@@ -2203,3 +2228,30 @@ let reverseMapFromMap = function (map, f) {
     return acc;
   }, {});
 };
+
+async function assignDefaultRankToUsers(
+  players: IUser[],
+  seasonNumber: number,
+) {
+  for (const player of players) {
+    const user = await Mongo.getUserByUserId(player.userId);
+    if (!user.currentRanking) {
+      const rankData = new Rank({
+        userId: user._id,
+        username: user.username,
+        seasonNumber: seasonNumber,
+      });
+      await rankData.save();
+      console.log(
+        `Rank data for ${user.username} saved, rankedId: ${rankData._id}`,
+      );
+      user.currentRanking = rankData._id;
+      await user.save();
+      console.log(
+        `Rank data for ${user.username} assigned, currentRanking: ${user.currentRanking}`,
+      );
+    } else {
+      console.log(`User ${user.username} already has a rank`);
+    }
+  }
+}
