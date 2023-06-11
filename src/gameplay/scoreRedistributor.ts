@@ -1,5 +1,6 @@
 import Mongo from '../db/mongo';
 import { eloConstants } from '../elo/constants/eloConstants';
+import { IRank } from '../models/types';
 
 class ScoreRedistributor {
   static async punishPlayers(
@@ -49,10 +50,11 @@ class ScoreRedistributor {
   static async updateRankData(
     usernameLower: string,
     leavePenaltyChange: number,
-  ): Promise<void> {
+  ): Promise<IRank> {
     const rankData = await Mongo.getUserRankByUsername(usernameLower);
     rankData.leavePenalty += leavePenaltyChange;
     await Mongo.updateRankRatings(usernameLower, rankData);
+    return rankData;
   }
 }
 
