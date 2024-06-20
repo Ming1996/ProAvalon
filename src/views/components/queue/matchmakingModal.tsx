@@ -26,25 +26,36 @@ export function MatchMakingModal() {
     socket_.on('confirm-ready-to-play', function () {
       setModalOpen(true);
       setShowElement(false);
-      setClickedButton(null);
     });
     socket_.on('leave-queue', function () {
       setShowElement(false);
       setClickedButton(null);
       setButtonsDisabled(false);
     });
-    socket_.on('declined-to-play', function () {
+    socket_.on('declined-to-play', function (data) {
+      if (data.decliningPlayer !== data.username) {
+        setShowElement(true);
+        alert('Someone has left the queue');
+      } else {
+        setClickedButton(null);
+        alert('You have left the queue');
+      }
       setModalOpen(false);
-      alert('Someone has left the queue');
+      setConfirmJoinGame(false);
     });
     socket_.on('game-has-begun', function () {
       setModalOpen(false);
+      setClickedButton(null);
     });
   }, []);
 
   useEffect(() => {
     if (clickedButton === 'unrankBtn') {
       socket_.emit('join-unranked-queue', {
+        numPlayers: 6,
+      });
+    } else if (clickedButton === 'rankBtn') {
+      socket_.emit('join-ranked-queue', {
         numPlayers: 6,
       });
     }
@@ -57,18 +68,30 @@ export function MatchMakingModal() {
   };
 
   const leaveQueue = () => {
-    socket_.emit('leave-unranked-queue');
+    if (clickedButton === 'unrankBtn') {
+      socket_.emit('leave-unranked-queue');
+    } else if (clickedButton === 'rankBtn') {
+      socket_.emit('leave-ranked-queue');
+    }
     setShowElement(false);
     setClickedButton(null);
   };
 
   const joinGame = () => {
-    socket_.emit('ready-unranked-game', { playerReady: true });
+    if (clickedButton === 'unrankBtn') {
+      socket_.emit('ready-unranked-game', { playerReady: true });
+    } else if (clickedButton === 'rankBtn') {
+      socket_.emit('ready-ranked-game', { playerReady: true });
+    }
     setConfirmJoinGame(true);
   };
 
   const cancelQueue = () => {
-    socket_.emit('ready-unranked-game', { playerReady: false });
+    if (clickedButton === 'unrankBtn') {
+      socket_.emit('ready-unranked-game', { playerReady: false });
+    } else if (clickedButton === 'rankBtn') {
+      socket_.emit('ready-ranked-game', { playerReady: false });
+    }
   };
 
   return (
@@ -81,6 +104,7 @@ export function MatchMakingModal() {
             buttonsDisabled,
             handleClick,
           })}
+          id='rankdButton'
           className="btn btn-default"
         >
           Rank Game
@@ -101,7 +125,7 @@ export function MatchMakingModal() {
       </div>
 
       {showElement && <Loading leaveQueue={leaveQueue} />}
-
+          
       <Modal
         isOpen={modalOpen}
         onRequestClose={cancelQueue}

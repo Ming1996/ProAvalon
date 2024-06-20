@@ -46,7 +46,7 @@ const ModalContent: React.FC<ModalContentProps> = ({
   }, [startCountdown, second, socket_]);
 
   // Calculate the progress percentage
-  const progress = second / maxSecond * 100;
+  const progress = (second / maxSecond) * 100;
 
   // Determine the background color based on remaining time
   let backgroundColor = '#87ceeb'; // Default color
@@ -58,6 +58,11 @@ const ModalContent: React.FC<ModalContentProps> = ({
   if (second <= 10) {
     backgroundColor = '#ff0000'; // Red color
   }
+
+  const handleJoinGame = () => {
+    setStartCountdown(false); // Stop the countdown timer
+    joinGame(); // Call the original joinGame function
+  };
 
   return (
     <div style={modalElement}>
@@ -71,14 +76,16 @@ const ModalContent: React.FC<ModalContentProps> = ({
           ></div>
         </div>
       )}
-      <div style={centerElement}>
-        <button style={btnGreen} onClick={joinGame}>
-          Join
-        </button>
-        <button style={btnRed} onClick={cancelQueue}>
-          Cancel
-        </button>
-      </div>
+      {!confirmJoinGame && (
+        <div style={centerElement}>
+          <button style={btnGreen} onClick={handleJoinGame}>
+            Join
+          </button>
+          <button style={btnRed} onClick={cancelQueue}>
+            Cancel
+          </button>
+        </div>
+      )}
     </div>
   );
 };
